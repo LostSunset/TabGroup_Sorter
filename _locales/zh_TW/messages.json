@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "TabGroup Sorter"
+  },
+  "appDescription": {
+    "message": "對 Chrome 分頁群組進行排序 — 依名稱、建立時間、分頁數量、顏色，或手動拖曳排序。"
+  }
+}

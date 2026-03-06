@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+  <title>TabGroup Sorter</title>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1 id="title">TabGroup Sorter</h1>
+      <div class="header-actions">
+        <button id="btn-lang" class="icon-btn" title="切換語言">EN</button>
+        <button id="btn-settings" class="icon-btn" title="設定">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z"/>
+            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.902 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.892 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.892-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 00-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291a1.873 1.873 0 00-1.116-2.693l-.318-.094c-.835-.246-.835-1.428 0-1.674l.319-.094a1.873 1.873 0 001.115-2.692l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.116l.094-.318z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <button id="btn-collapse-all" class="action-btn" data-i18n="collapseAll">收合全部</button>
+      <button id="btn-expand-all" class="action-btn" data-i18n="expandAll">展開全部</button>
+    </div>
+
+    <!-- Sort Controls -->
+    <div class="sort-controls">
+      <label class="sort-label" data-i18n="sortBy">排序方式</label>
+      <div class="sort-buttons">
+        <button class="sort-btn" data-sort="name" data-i18n="byName">名稱</button>
+        <button class="sort-btn" data-sort="tabCount" data-i18n="byTabCount">分頁數</button>
+        <button class="sort-btn" data-sort="color" data-i18n="byColor">顏色</button>
+        <button class="sort-btn" data-sort="created" data-i18n="byCreated">順序</button>
+      </div>
+      <div class="sort-direction">
+        <button id="btn-asc" class="dir-btn active" data-i18n="asc">升序</button>
+        <button id="btn-desc" class="dir-btn" data-i18n="desc">降序</button>
+      </div>
+    </div>
+
+    <!-- Group List -->
+    <div class="group-list-header">
+      <span data-i18n="groupList">群組列表</span>
+      <span id="group-count" class="badge">0</span>
+    </div>
+    <div id="group-list" class="group-list">
+      <div class="empty-state" data-i18n="noGroups">目前沒有分頁群組</div>
+    </div>
+
+    <!-- Ungrouped tabs info -->
+    <div id="ungrouped-info" class="ungrouped-info" style="display:none;">
+      <span id="ungrouped-label" data-i18n="ungroupedTabs">未分組分頁</span>
+      <span id="ungrouped-count" class="badge">0</span>
+      <select id="ungrouped-position" class="select-sm">
+        <option value="end" data-i18n="moveToEnd">移到最後</option>
+        <option value="start" data-i18n="moveToStart">移到最前</option>
+      </select>
+    </div>
+
+    <!-- Settings Panel (hidden by default) -->
+    <div id="settings-panel" class="settings-panel" style="display:none;">
+      <h3 data-i18n="settingsTitle">設定</h3>
+      <label class="setting-row">
+        <input type="checkbox" id="auto-sort">
+        <span data-i18n="autoSort">開新視窗時自動排序</span>
+      </label>
+      <button id="btn-save-settings" class="action-btn primary" data-i18n="save">儲存</button>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" style="display:none;"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

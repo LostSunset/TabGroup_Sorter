@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "TabGroup Sorter"
+  },
+  "appDescription": {
+    "message": "Sort Chrome tab groups by name, creation time, tab count, color, or drag-and-drop."
+  }
+}
