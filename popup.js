@@ -264,25 +264,37 @@ async function saveSettings(settings) {
 // ── UI ──
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // 用 active tab 取得正確的 windowId（比 chrome.windows.getCurrent 更可靠）
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  currentWindowId = activeTab.windowId;
+  try {
+    // 多重 fallback 取得正確的 windowId
+    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTabs.length > 0) {
+      currentWindowId = activeTabs[0].windowId;
+    } else {
+      // fallback: 用 lastFocused window
+      const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+      currentWindowId = win.id;
+    }
 
-  const settings = await loadSettings();
-  if (settings) {
-    currentLang = settings.language || 'zh_TW';
-    currentDirection = settings.sortDirection || 'asc';
-    currentSortMethod = settings.sortMethod || null;
-    pinnedGroups = settings.pinnedGroups || [];
-    document.getElementById('auto-sort').checked = settings.autoSort || false;
-    document.getElementById('ungrouped-position').value = settings.ungroupedPosition || 'end';
+    const settings = await loadSettings();
+    if (settings) {
+      currentLang = settings.language || 'zh_TW';
+      currentDirection = settings.sortDirection || 'asc';
+      currentSortMethod = settings.sortMethod || null;
+      pinnedGroups = settings.pinnedGroups || [];
+      const autoSortEl = document.getElementById('auto-sort');
+      const ungroupedPosEl = document.getElementById('ungrouped-position');
+      if (autoSortEl) autoSortEl.checked = settings.autoSort || false;
+      if (ungroupedPosEl) ungroupedPosEl.value = settings.ungroupedPosition || 'end';
+    }
+
+    applyLanguage();
+    updateDirectionButtons();
+    updateSortButtons();
+    await refreshAll();
+    bindEvents();
+  } catch (err) {
+    console.error('TabGroup Sorter init error:', err);
   }
-
-  applyLanguage();
-  updateDirectionButtons();
-  updateSortButtons();
-  await refreshAll();
-  bindEvents();
 });
 
 function applyLanguage() {
@@ -389,11 +401,19 @@ async function refreshAll() {
 }
 
 async function refreshOpenGroups() {
-  const data = await getOpenGroups(currentWindowId);
+  let data;
+  try {
+    data = await getOpenGroups(currentWindowId);
+  } catch (e) {
+    console.warn('refreshOpenGroups error:', e);
+    data = { groups: [], ungroupedCount: 0 };
+  }
   const list = document.getElementById('open-group-list');
   const t = i18n[currentLang];
+  if (!list) return;
 
-  document.getElementById('open-count').textContent = data.groups.length;
+  const countEl = document.getElementById('open-count');
+  if (countEl) countEl.textContent = data.groups.length;
 
   if (data.groups.length === 0) {
     list.innerHTML = `<div class="empty-state">${t.noOpenGroups}</div>`;
@@ -413,16 +433,23 @@ async function refreshOpenGroups() {
 }
 
 async function refreshClosedGroups() {
-  let closedGroups = await getClosedGroups();
+  let closedGroups;
+  try {
+    closedGroups = await getClosedGroups();
+  } catch (e) {
+    console.warn('refreshClosedGroups error:', e);
+    closedGroups = [];
+  }
   const list = document.getElementById('closed-group-list');
   const t = i18n[currentLang];
+  if (!list) return;
 
-  // 排序已關閉群組（套用當前排序方式）
   if (currentSortMethod) {
     closedGroups = sortClosedGroups([...closedGroups], currentSortMethod, currentDirection);
   }
 
-  document.getElementById('closed-count').textContent = closedGroups.length;
+  const countEl = document.getElementById('closed-count');
+  if (countEl) countEl.textContent = closedGroups.length;
 
   if (closedGroups.length === 0) {
     list.innerHTML = `<div class="empty-state">${t.noClosedGroups}</div>`;
@@ -600,6 +627,7 @@ function setupDragAndDrop(list) {
 
 function showToast(message) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.textContent = message;
   toast.style.display = 'block';
   setTimeout(() => { toast.style.display = 'none'; }, 1500);
