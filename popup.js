@@ -24,6 +24,8 @@ const i18n = {
     clearClosed: '清除所有已關閉紀錄',
     save: '儲存',
     sortDone: '排序完成！',
+    collapsed: '已收合全部！',
+    expanded: '已展開全部！',
     saved: '已儲存！',
     cleared: '已清除！',
     reopened: '已重新開啟！',
@@ -57,6 +59,8 @@ const i18n = {
     clearClosed: 'Clear all closed records',
     save: 'Save',
     sortDone: 'Sorted!',
+    collapsed: 'All collapsed!',
+    expanded: 'All expanded!',
     saved: 'Saved!',
     cleared: 'Cleared!',
     reopened: 'Reopened!',
@@ -93,8 +97,20 @@ let currentWindowId;
 // ── Chrome API helpers ──
 
 async function getOpenGroups(windowId) {
-  const tabs = await chrome.tabs.query({ windowId });
-  const groups = await chrome.tabGroups.query({ windowId });
+  let tabs = await chrome.tabs.query({ windowId });
+  let groups = await chrome.tabGroups.query({ windowId });
+
+  // Fallback: 如果 windowId 查不到結果，用 currentWindow
+  if (groups.length === 0 && tabs.length === 0) {
+    tabs = await chrome.tabs.query({ currentWindow: true });
+    groups = await chrome.tabGroups.query({});
+    // 過濾出同一視窗的群組
+    if (tabs.length > 0) {
+      const wid = tabs[0].windowId;
+      groups = groups.filter(g => g.windowId === wid);
+      tabs = tabs.filter(t => t.windowId === wid);
+    }
+  }
 
   const groupMap = {};
   for (const group of groups) {
@@ -206,8 +222,30 @@ async function applySort(windowId, sortMethod, sortDirection, pinned, ungroupedP
 
 async function toggleCollapseAll(windowId, collapse) {
   const groups = await chrome.tabGroups.query({ windowId });
+  if (groups.length === 0) return;
+
+  if (collapse) {
+    // Chrome 不允許收合含 active tab 的群組，需先把 active tab 移出
+    const [activeTab] = await chrome.tabs.query({ active: true, windowId });
+    if (activeTab && activeTab.groupId !== -1) {
+      // 找一個不在任何群組的分頁或建立一個新分頁來切換焦點
+      const ungroupedTabs = await chrome.tabs.query({ windowId, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
+      if (ungroupedTabs.length > 0) {
+        await chrome.tabs.update(ungroupedTabs[0].id, { active: true });
+      } else {
+        const newTab = await chrome.tabs.create({ active: true });
+        // 等一下讓 Chrome 切換焦點
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+  }
+
   for (const group of groups) {
-    await chrome.tabGroups.update(group.id, { collapsed: collapse });
+    try {
+      await chrome.tabGroups.update(group.id, { collapsed: collapse });
+    } catch (e) {
+      console.warn('toggleCollapse failed for group', group.id, e);
+    }
   }
 }
 
@@ -226,8 +264,9 @@ async function saveSettings(settings) {
 // ── UI ──
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const win = await chrome.windows.getCurrent();
-  currentWindowId = win.id;
+  // 用 active tab 取得正確的 windowId（比 chrome.windows.getCurrent 更可靠）
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  currentWindowId = activeTab.windowId;
 
   const settings = await loadSettings();
   if (settings) {
@@ -270,33 +309,38 @@ function bindEvents() {
   document.getElementById('btn-collapse-all').addEventListener('click', async () => {
     await toggleCollapseAll(currentWindowId, true);
     await refreshAll();
-    showToast(i18n[currentLang].sortDone);
+    showToast(i18n[currentLang].collapsed);
   });
 
   document.getElementById('btn-expand-all').addEventListener('click', async () => {
     await toggleCollapseAll(currentWindowId, false);
     await refreshAll();
-    showToast(i18n[currentLang].sortDone);
+    showToast(i18n[currentLang].expanded);
   });
 
   document.querySelectorAll('.sort-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
+      // 同一排序方式再點一次 → 切換升降序
+      if (currentSortMethod === btn.dataset.sort) {
+        currentDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+        updateDirectionButtons();
+      }
       currentSortMethod = btn.dataset.sort;
       updateSortButtons();
       await performSort();
     });
   });
 
-  document.getElementById('btn-asc').addEventListener('click', () => {
+  document.getElementById('btn-asc').addEventListener('click', async () => {
     currentDirection = 'asc';
     updateDirectionButtons();
-    if (currentSortMethod) performSort();
+    if (currentSortMethod) await performSort();
   });
 
-  document.getElementById('btn-desc').addEventListener('click', () => {
+  document.getElementById('btn-desc').addEventListener('click', async () => {
     currentDirection = 'desc';
     updateDirectionButtons();
-    if (currentSortMethod) performSort();
+    if (currentSortMethod) await performSort();
   });
 
   document.getElementById('btn-save-settings').addEventListener('click', async () => {
