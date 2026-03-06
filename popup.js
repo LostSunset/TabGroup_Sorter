@@ -1,4 +1,5 @@
 // TabGroup Sorter - Popup Script
+// 直接呼叫 Chrome API，不依賴 background service worker
 
 const i18n = {
   zh_TW: {
@@ -53,6 +54,8 @@ const i18n = {
   }
 };
 
+const COLOR_ORDER = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+
 const COLOR_MAP = {
   grey: 'var(--group-grey)',
   blue: 'var(--group-blue)',
@@ -71,19 +74,128 @@ let currentSortMethod = null;
 let pinnedGroups = [];
 let currentWindowId;
 
-// Initialize
-document.addEventListener('DOMContentLoaded', async () => {
-  const window = await chrome.windows.getCurrent();
-  currentWindowId = window.id;
+// ── Chrome API helpers（直接呼叫，不經 background）──
 
-  // Load settings
-  const settings = await sendMessage({ action: 'getSettings' });
+async function getGroupsInfo(windowId) {
+  const tabs = await chrome.tabs.query({ windowId });
+  const groups = await chrome.tabGroups.query({ windowId });
+
+  const groupMap = {};
+  for (const group of groups) {
+    groupMap[group.id] = {
+      id: group.id,
+      title: group.title || '',
+      color: group.color,
+      collapsed: group.collapsed,
+      tabCount: 0,
+      minIndex: Infinity
+    };
+  }
+
+  let ungroupedCount = 0;
+
+  for (const tab of tabs) {
+    if (tab.groupId !== -1 && groupMap[tab.groupId]) {
+      groupMap[tab.groupId].tabCount++;
+      groupMap[tab.groupId].minIndex = Math.min(groupMap[tab.groupId].minIndex, tab.index);
+    } else {
+      ungroupedCount++;
+    }
+  }
+
+  const groupList = Object.values(groupMap).sort((a, b) => a.minIndex - b.minIndex);
+  return { groups: groupList, ungroupedCount };
+}
+
+async function applySort(windowId, sortMethod, sortDirection, pinned, ungroupedPosition) {
+  const info = await getGroupsInfo(windowId);
+
+  const pinnedList = info.groups.filter(g => pinned.includes(g.id));
+  const unpinned = info.groups.filter(g => !pinned.includes(g.id));
+
+  unpinned.sort((a, b) => {
+    let cmp = 0;
+    switch (sortMethod) {
+      case 'name':
+        cmp = (a.title || '').localeCompare(b.title || '', 'zh-Hant');
+        break;
+      case 'tabCount':
+        cmp = a.tabCount - b.tabCount;
+        break;
+      case 'color':
+        cmp = COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color);
+        break;
+      case 'created':
+        cmp = a.minIndex - b.minIndex;
+        break;
+    }
+    return sortDirection === 'desc' ? -cmp : cmp;
+  });
+
+  const sortedGroups = [...pinnedList, ...unpinned];
+
+  const tabs = await chrome.tabs.query({ windowId });
+  const ungroupedTabs = tabs.filter(t => t.groupId === -1).map(t => t.id);
+
+  let idx = 0;
+
+  if (ungroupedPosition === 'start' && ungroupedTabs.length > 0) {
+    await chrome.tabs.move(ungroupedTabs, { index: 0 });
+    idx = ungroupedTabs.length;
+  }
+
+  for (const group of sortedGroups) {
+    try {
+      await chrome.tabGroups.move(group.id, { index: idx });
+      const groupTabs = await chrome.tabs.query({ windowId, groupId: group.id });
+      idx += groupTabs.length;
+    } catch (e) {
+      console.warn('Failed to move group:', group.id, e);
+    }
+  }
+
+  if (ungroupedPosition === 'end' && ungroupedTabs.length > 0) {
+    try {
+      await chrome.tabs.move(ungroupedTabs, { index: -1 });
+    } catch (e) {
+      console.warn('Failed to move ungrouped tabs:', e);
+    }
+  }
+}
+
+async function toggleCollapseAll(windowId, collapse) {
+  const groups = await chrome.tabGroups.query({ windowId });
+  for (const group of groups) {
+    await chrome.tabGroups.update(group.id, { collapsed: collapse });
+  }
+}
+
+async function loadSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('settings', (result) => {
+      resolve(result.settings || {});
+    });
+  });
+}
+
+async function saveSettings(settings) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ settings }, resolve);
+  });
+}
+
+// ── UI Logic ──
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const win = await chrome.windows.getCurrent();
+  currentWindowId = win.id;
+
+  const settings = await loadSettings();
   if (settings) {
     currentLang = settings.language || 'zh_TW';
     currentDirection = settings.sortDirection || 'asc';
     currentSortMethod = settings.sortMethod || null;
     pinnedGroups = settings.pinnedGroups || [];
-
     document.getElementById('auto-sort').checked = settings.autoSort || false;
     document.getElementById('ungrouped-position').value = settings.ungroupedPosition || 'end';
   }
@@ -95,55 +207,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
 });
 
-function sendMessage(message) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, resolve);
-  });
-}
-
 function applyLanguage() {
   const t = i18n[currentLang];
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if (t[key]) {
-      if (el.tagName === 'OPTION') {
-        el.textContent = t[key];
-      } else {
-        el.textContent = t[key];
-      }
-    }
+    if (t[key]) el.textContent = t[key];
   });
   document.getElementById('btn-lang').textContent = currentLang === 'zh_TW' ? 'EN' : '中';
 }
 
 function bindEvents() {
-  // Language toggle
   document.getElementById('btn-lang').addEventListener('click', () => {
     currentLang = currentLang === 'zh_TW' ? 'en' : 'zh_TW';
     applyLanguage();
     refreshGroupList();
   });
 
-  // Settings toggle
   document.getElementById('btn-settings').addEventListener('click', () => {
     const panel = document.getElementById('settings-panel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   });
 
-  // Collapse / Expand all
   document.getElementById('btn-collapse-all').addEventListener('click', async () => {
-    await sendMessage({ action: 'toggleCollapseAll', windowId: currentWindowId, collapse: true });
+    await toggleCollapseAll(currentWindowId, true);
     await refreshGroupList();
     showToast(i18n[currentLang].sortDone);
   });
 
   document.getElementById('btn-expand-all').addEventListener('click', async () => {
-    await sendMessage({ action: 'toggleCollapseAll', windowId: currentWindowId, collapse: false });
+    await toggleCollapseAll(currentWindowId, false);
     await refreshGroupList();
     showToast(i18n[currentLang].sortDone);
   });
 
-  // Sort buttons
   document.querySelectorAll('.sort-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       currentSortMethod = btn.dataset.sort;
@@ -152,7 +248,6 @@ function bindEvents() {
     });
   });
 
-  // Direction buttons
   document.getElementById('btn-asc').addEventListener('click', () => {
     currentDirection = 'asc';
     updateDirectionButtons();
@@ -165,7 +260,6 @@ function bindEvents() {
     if (currentSortMethod) performSort();
   });
 
-  // Save settings
   document.getElementById('btn-save-settings').addEventListener('click', async () => {
     const settings = {
       autoSort: document.getElementById('auto-sort').checked,
@@ -175,11 +269,10 @@ function bindEvents() {
       ungroupedPosition: document.getElementById('ungrouped-position').value,
       language: currentLang
     };
-    await sendMessage({ action: 'saveSettings', settings });
+    await saveSettings(settings);
     showToast(i18n[currentLang].saved);
   });
 
-  // Ungrouped position change
   document.getElementById('ungrouped-position').addEventListener('change', () => {
     if (currentSortMethod) performSort();
   });
@@ -187,14 +280,7 @@ function bindEvents() {
 
 async function performSort() {
   const ungroupedPosition = document.getElementById('ungrouped-position').value;
-  await sendMessage({
-    action: 'sort',
-    windowId: currentWindowId,
-    sortMethod: currentSortMethod,
-    sortDirection: currentDirection,
-    pinnedGroups,
-    ungroupedPosition
-  });
+  await applySort(currentWindowId, currentSortMethod, currentDirection, pinnedGroups, ungroupedPosition);
   await refreshGroupList();
   showToast(i18n[currentLang].sortDone);
 }
@@ -211,8 +297,7 @@ function updateDirectionButtons() {
 }
 
 async function refreshGroupList() {
-  const data = await sendMessage({ action: 'getGroups', windowId: currentWindowId });
-  if (!data) return;
+  const data = await getGroupsInfo(currentWindowId);
 
   const list = document.getElementById('group-list');
   const t = i18n[currentLang];
@@ -224,13 +309,11 @@ async function refreshGroupList() {
   } else {
     list.innerHTML = '';
     data.groups.forEach((group, index) => {
-      const item = createGroupItem(group, index, t);
-      list.appendChild(item);
+      list.appendChild(createGroupItem(group, index, t));
     });
     setupDragAndDrop(list);
   }
 
-  // Ungrouped info
   const ungroupedInfo = document.getElementById('ungrouped-info');
   if (data.ungroupedCount > 0) {
     ungroupedInfo.style.display = 'flex';
@@ -252,14 +335,13 @@ function createGroupItem(group, index, t) {
   const nameClass = group.title ? 'group-name' : 'group-name unnamed';
 
   item.innerHTML = `
-    <span class="group-drag-handle">⠿</span>
+    <span class="group-drag-handle">&#x2807;</span>
     <span class="group-color" style="background:${COLOR_MAP[group.color] || COLOR_MAP.grey}"></span>
     <span class="${nameClass}">${escapeHtml(displayName)}</span>
     <span class="group-tab-count">${group.tabCount} ${t.tabs}</span>
-    <button class="group-pin ${isPinned ? 'pinned' : ''}" data-group-id="${group.id}" title="${isPinned ? t.unpin : t.pin}">📌</button>
+    <button class="group-pin ${isPinned ? 'pinned' : ''}" data-group-id="${group.id}" title="${isPinned ? t.unpin : t.pin}">&#x1F4CC;</button>
   `;
 
-  // Pin button
   item.querySelector('.group-pin').addEventListener('click', (e) => {
     e.stopPropagation();
     const gid = group.id;
@@ -306,13 +388,11 @@ function setupDragAndDrop(list) {
     item.addEventListener('drop', async (e) => {
       e.preventDefault();
       item.classList.remove('drag-over');
-
       if (!draggedItem || draggedItem === item) return;
 
       const draggedGroupId = parseInt(draggedItem.dataset.groupId);
       const targetGroupId = parseInt(item.dataset.groupId);
 
-      // Reorder in DOM
       const allItems = [...list.querySelectorAll('.group-item')];
       const draggedIdx = allItems.indexOf(draggedItem);
       const targetIdx = allItems.indexOf(item);
@@ -323,16 +403,14 @@ function setupDragAndDrop(list) {
         list.insertBefore(draggedItem, item);
       }
 
-      // Get the target group's current min tab index to move to
-      const data = await sendMessage({ action: 'getGroups', windowId: currentWindowId });
+      const data = await getGroupsInfo(currentWindowId);
       const targetGroup = data.groups.find(g => g.id === targetGroupId);
       if (targetGroup) {
-        await sendMessage({
-          action: 'moveGroup',
-          windowId: currentWindowId,
-          groupId: draggedGroupId,
-          targetIndex: targetGroup.minIndex
-        });
+        try {
+          await chrome.tabGroups.move(draggedGroupId, { index: targetGroup.minIndex });
+        } catch (e) {
+          console.warn('Failed to move group:', e);
+        }
         await refreshGroupList();
         showToast(i18n[currentLang].sortDone);
       }
