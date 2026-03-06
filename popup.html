@@ -10,7 +10,7 @@
   <div class="container">
     <!-- Header -->
     <header class="header">
-      <h1 id="title">TabGroup Sorter</h1>
+      <h1>TabGroup Sorter</h1>
       <div class="header-actions">
         <button id="btn-lang" class="icon-btn" title="切換語言">EN</button>
         <button id="btn-settings" class="icon-btn" title="設定">
@@ -43,18 +43,27 @@
       </div>
     </div>
 
-    <!-- Group List -->
-    <div class="group-list-header">
-      <span data-i18n="groupList">群組列表</span>
-      <span id="group-count" class="badge">0</span>
+    <!-- Open Groups -->
+    <div class="section-header">
+      <span data-i18n="openGroups">開啟中的群組</span>
+      <span id="open-count" class="badge">0</span>
     </div>
-    <div id="group-list" class="group-list">
-      <div class="empty-state" data-i18n="noGroups">目前沒有分頁群組</div>
+    <div id="open-group-list" class="group-list">
+      <div class="empty-state" data-i18n="noOpenGroups">目前沒有開啟中的群組</div>
+    </div>
+
+    <!-- Closed Groups -->
+    <div class="section-header">
+      <span data-i18n="closedGroups">已關閉的群組</span>
+      <span id="closed-count" class="badge">0</span>
+    </div>
+    <div id="closed-group-list" class="group-list">
+      <div class="empty-state" data-i18n="noClosedGroups">沒有已關閉的群組紀錄</div>
     </div>
 
     <!-- Ungrouped tabs info -->
     <div id="ungrouped-info" class="ungrouped-info" style="display:none;">
-      <span id="ungrouped-label" data-i18n="ungroupedTabs">未分組分頁</span>
+      <span data-i18n="ungroupedTabs">未分組分頁</span>
       <span id="ungrouped-count" class="badge">0</span>
       <select id="ungrouped-position" class="select-sm">
         <option value="end" data-i18n="moveToEnd">移到最後</option>
@@ -62,14 +71,17 @@
       </select>
     </div>
 
-    <!-- Settings Panel (hidden by default) -->
+    <!-- Settings Panel -->
     <div id="settings-panel" class="settings-panel" style="display:none;">
       <h3 data-i18n="settingsTitle">設定</h3>
       <label class="setting-row">
         <input type="checkbox" id="auto-sort">
         <span data-i18n="autoSort">開新視窗時自動排序</span>
       </label>
-      <button id="btn-save-settings" class="action-btn primary" data-i18n="save">儲存</button>
+      <div class="settings-actions">
+        <button id="btn-clear-closed" class="action-btn danger" data-i18n="clearClosed">清除所有已關閉紀錄</button>
+        <button id="btn-save-settings" class="action-btn primary" data-i18n="save">儲存</button>
+      </div>
     </div>
 
     <!-- Toast -->

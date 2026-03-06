@@ -1,5 +1,5 @@
 // TabGroup Sorter - Popup Script
-// 直接呼叫 Chrome API，不依賴 background service worker
+// 直接呼叫 Chrome API，已關閉群組從 storage 讀取
 
 const i18n = {
   zh_TW: {
@@ -12,20 +12,28 @@ const i18n = {
     byCreated: '順序',
     asc: '升序',
     desc: '降序',
-    groupList: '群組列表',
-    noGroups: '目前沒有分頁群組',
+    openGroups: '開啟中的群組',
+    closedGroups: '已關閉的群組',
+    noOpenGroups: '目前沒有開啟中的群組',
+    noClosedGroups: '沒有已關閉的群組紀錄',
     ungroupedTabs: '未分組分頁',
     moveToEnd: '移到最後',
     moveToStart: '移到最前',
     settingsTitle: '設定',
     autoSort: '開新視窗時自動排序',
+    clearClosed: '清除所有已關閉紀錄',
     save: '儲存',
     sortDone: '排序完成！',
     saved: '已儲存！',
+    cleared: '已清除！',
+    reopened: '已重新開啟！',
     unnamed: '(未命名)',
     pin: '釘選',
     unpin: '取消釘選',
-    tabs: '個分頁'
+    tabs: '個分頁',
+    reopen: '開啟',
+    remove: '刪除',
+    ago: '前'
   },
   en: {
     collapseAll: 'Collapse All',
@@ -37,20 +45,28 @@ const i18n = {
     byCreated: 'Order',
     asc: 'Asc',
     desc: 'Desc',
-    groupList: 'Groups',
-    noGroups: 'No tab groups found',
+    openGroups: 'Open Groups',
+    closedGroups: 'Closed Groups',
+    noOpenGroups: 'No open tab groups',
+    noClosedGroups: 'No closed group records',
     ungroupedTabs: 'Ungrouped tabs',
     moveToEnd: 'Move to end',
     moveToStart: 'Move to start',
     settingsTitle: 'Settings',
     autoSort: 'Auto-sort on new window',
+    clearClosed: 'Clear all closed records',
     save: 'Save',
     sortDone: 'Sorted!',
     saved: 'Saved!',
+    cleared: 'Cleared!',
+    reopened: 'Reopened!',
     unnamed: '(Unnamed)',
     pin: 'Pin',
     unpin: 'Unpin',
-    tabs: 'tabs'
+    tabs: 'tabs',
+    reopen: 'Open',
+    remove: 'Del',
+    ago: 'ago'
   }
 };
 
@@ -74,9 +90,9 @@ let currentSortMethod = null;
 let pinnedGroups = [];
 let currentWindowId;
 
-// ── Chrome API helpers（直接呼叫，不經 background）──
+// ── Chrome API helpers ──
 
-async function getGroupsInfo(windowId) {
+async function getOpenGroups(windowId) {
   const tabs = await chrome.tabs.query({ windowId });
   const groups = await chrome.tabGroups.query({ windowId });
 
@@ -93,7 +109,6 @@ async function getGroupsInfo(windowId) {
   }
 
   let ungroupedCount = 0;
-
   for (const tab of tabs) {
     if (tab.groupId !== -1 && groupMap[tab.groupId]) {
       groupMap[tab.groupId].tabCount++;
@@ -103,12 +118,52 @@ async function getGroupsInfo(windowId) {
     }
   }
 
-  const groupList = Object.values(groupMap).sort((a, b) => a.minIndex - b.minIndex);
-  return { groups: groupList, ungroupedCount };
+  return {
+    groups: Object.values(groupMap).sort((a, b) => a.minIndex - b.minIndex),
+    ungroupedCount
+  };
+}
+
+async function getClosedGroups() {
+  const result = await chrome.storage.local.get('closedGroups');
+  return result.closedGroups || [];
+}
+
+async function removeClosedGroup(closedId) {
+  const result = await chrome.storage.local.get('closedGroups');
+  const list = (result.closedGroups || []).filter(g => g.id !== closedId);
+  await chrome.storage.local.set({ closedGroups: list });
+}
+
+async function clearAllClosed() {
+  await chrome.storage.local.set({ closedGroups: [] });
+}
+
+async function reopenGroup(closedGroup) {
+  // 建立第一個分頁
+  const firstUrl = closedGroup.tabs[0]?.url || 'chrome://newtab';
+  const firstTab = await chrome.tabs.create({ url: firstUrl, active: false });
+
+  // 建立群組
+  const groupId = await chrome.tabs.group({ tabIds: [firstTab.id] });
+  await chrome.tabGroups.update(groupId, {
+    title: closedGroup.title,
+    color: closedGroup.color
+  });
+
+  // 建立其餘分頁並加入群組
+  for (let i = 1; i < closedGroup.tabs.length; i++) {
+    const url = closedGroup.tabs[i]?.url || 'chrome://newtab';
+    const tab = await chrome.tabs.create({ url, active: false });
+    await chrome.tabs.group({ tabIds: [tab.id], groupId });
+  }
+
+  // 從已關閉清單中移除
+  await removeClosedGroup(closedGroup.id);
 }
 
 async function applySort(windowId, sortMethod, sortDirection, pinned, ungroupedPosition) {
-  const info = await getGroupsInfo(windowId);
+  const info = await getOpenGroups(windowId);
 
   const pinnedList = info.groups.filter(g => pinned.includes(g.id));
   const unpinned = info.groups.filter(g => !pinned.includes(g.id));
@@ -116,27 +171,17 @@ async function applySort(windowId, sortMethod, sortDirection, pinned, ungroupedP
   unpinned.sort((a, b) => {
     let cmp = 0;
     switch (sortMethod) {
-      case 'name':
-        cmp = (a.title || '').localeCompare(b.title || '', 'zh-Hant');
-        break;
-      case 'tabCount':
-        cmp = a.tabCount - b.tabCount;
-        break;
-      case 'color':
-        cmp = COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color);
-        break;
-      case 'created':
-        cmp = a.minIndex - b.minIndex;
-        break;
+      case 'name': cmp = (a.title || '').localeCompare(b.title || '', 'zh-Hant'); break;
+      case 'tabCount': cmp = a.tabCount - b.tabCount; break;
+      case 'color': cmp = COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color); break;
+      case 'created': cmp = a.minIndex - b.minIndex; break;
     }
     return sortDirection === 'desc' ? -cmp : cmp;
   });
 
-  const sortedGroups = [...pinnedList, ...unpinned];
-
+  const sorted = [...pinnedList, ...unpinned];
   const tabs = await chrome.tabs.query({ windowId });
   const ungroupedTabs = tabs.filter(t => t.groupId === -1).map(t => t.id);
-
   let idx = 0;
 
   if (ungroupedPosition === 'start' && ungroupedTabs.length > 0) {
@@ -144,22 +189,18 @@ async function applySort(windowId, sortMethod, sortDirection, pinned, ungroupedP
     idx = ungroupedTabs.length;
   }
 
-  for (const group of sortedGroups) {
+  for (const group of sorted) {
     try {
       await chrome.tabGroups.move(group.id, { index: idx });
-      const groupTabs = await chrome.tabs.query({ windowId, groupId: group.id });
-      idx += groupTabs.length;
+      const gTabs = await chrome.tabs.query({ windowId, groupId: group.id });
+      idx += gTabs.length;
     } catch (e) {
-      console.warn('Failed to move group:', group.id, e);
+      console.warn('Sort: failed to move group', group.id, e);
     }
   }
 
   if (ungroupedPosition === 'end' && ungroupedTabs.length > 0) {
-    try {
-      await chrome.tabs.move(ungroupedTabs, { index: -1 });
-    } catch (e) {
-      console.warn('Failed to move ungrouped tabs:', e);
-    }
+    try { await chrome.tabs.move(ungroupedTabs, { index: -1 }); } catch (e) { /* ignore */ }
   }
 }
 
@@ -171,20 +212,18 @@ async function toggleCollapseAll(windowId, collapse) {
 }
 
 async function loadSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('settings', (result) => {
-      resolve(result.settings || {});
-    });
+  return new Promise(resolve => {
+    chrome.storage.local.get('settings', r => resolve(r.settings || {}));
   });
 }
 
 async function saveSettings(settings) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     chrome.storage.local.set({ settings }, resolve);
   });
 }
 
-// ── UI Logic ──
+// ── UI ──
 
 document.addEventListener('DOMContentLoaded', async () => {
   const win = await chrome.windows.getCurrent();
@@ -203,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   applyLanguage();
   updateDirectionButtons();
   updateSortButtons();
-  await refreshGroupList();
+  await refreshAll();
   bindEvents();
 });
 
@@ -220,7 +259,7 @@ function bindEvents() {
   document.getElementById('btn-lang').addEventListener('click', () => {
     currentLang = currentLang === 'zh_TW' ? 'en' : 'zh_TW';
     applyLanguage();
-    refreshGroupList();
+    refreshAll();
   });
 
   document.getElementById('btn-settings').addEventListener('click', () => {
@@ -230,13 +269,13 @@ function bindEvents() {
 
   document.getElementById('btn-collapse-all').addEventListener('click', async () => {
     await toggleCollapseAll(currentWindowId, true);
-    await refreshGroupList();
+    await refreshAll();
     showToast(i18n[currentLang].sortDone);
   });
 
   document.getElementById('btn-expand-all').addEventListener('click', async () => {
     await toggleCollapseAll(currentWindowId, false);
-    await refreshGroupList();
+    await refreshAll();
     showToast(i18n[currentLang].sortDone);
   });
 
@@ -261,16 +300,21 @@ function bindEvents() {
   });
 
   document.getElementById('btn-save-settings').addEventListener('click', async () => {
-    const settings = {
+    await saveSettings({
       autoSort: document.getElementById('auto-sort').checked,
       sortMethod: currentSortMethod,
       sortDirection: currentDirection,
       pinnedGroups,
       ungroupedPosition: document.getElementById('ungrouped-position').value,
       language: currentLang
-    };
-    await saveSettings(settings);
+    });
     showToast(i18n[currentLang].saved);
+  });
+
+  document.getElementById('btn-clear-closed').addEventListener('click', async () => {
+    await clearAllClosed();
+    await refreshAll();
+    showToast(i18n[currentLang].cleared);
   });
 
   document.getElementById('ungrouped-position').addEventListener('change', () => {
@@ -279,9 +323,9 @@ function bindEvents() {
 }
 
 async function performSort() {
-  const ungroupedPosition = document.getElementById('ungrouped-position').value;
-  await applySort(currentWindowId, currentSortMethod, currentDirection, pinnedGroups, ungroupedPosition);
-  await refreshGroupList();
+  const pos = document.getElementById('ungrouped-position').value;
+  await applySort(currentWindowId, currentSortMethod, currentDirection, pinnedGroups, pos);
+  await refreshAll();
   showToast(i18n[currentLang].sortDone);
 }
 
@@ -296,21 +340,22 @@ function updateDirectionButtons() {
   document.getElementById('btn-desc').classList.toggle('active', currentDirection === 'desc');
 }
 
-async function refreshGroupList() {
-  const data = await getGroupsInfo(currentWindowId);
+async function refreshAll() {
+  await Promise.all([refreshOpenGroups(), refreshClosedGroups()]);
+}
 
-  const list = document.getElementById('group-list');
+async function refreshOpenGroups() {
+  const data = await getOpenGroups(currentWindowId);
+  const list = document.getElementById('open-group-list');
   const t = i18n[currentLang];
 
-  document.getElementById('group-count').textContent = data.groups.length;
+  document.getElementById('open-count').textContent = data.groups.length;
 
   if (data.groups.length === 0) {
-    list.innerHTML = `<div class="empty-state">${t.noGroups}</div>`;
+    list.innerHTML = `<div class="empty-state">${t.noOpenGroups}</div>`;
   } else {
     list.innerHTML = '';
-    data.groups.forEach((group, index) => {
-      list.appendChild(createGroupItem(group, index, t));
-    });
+    data.groups.forEach((group, i) => list.appendChild(createOpenGroupItem(group, i, t)));
     setupDragAndDrop(list);
   }
 
@@ -323,7 +368,41 @@ async function refreshGroupList() {
   }
 }
 
-function createGroupItem(group, index, t) {
+async function refreshClosedGroups() {
+  let closedGroups = await getClosedGroups();
+  const list = document.getElementById('closed-group-list');
+  const t = i18n[currentLang];
+
+  // 排序已關閉群組（套用當前排序方式）
+  if (currentSortMethod) {
+    closedGroups = sortClosedGroups([...closedGroups], currentSortMethod, currentDirection);
+  }
+
+  document.getElementById('closed-count').textContent = closedGroups.length;
+
+  if (closedGroups.length === 0) {
+    list.innerHTML = `<div class="empty-state">${t.noClosedGroups}</div>`;
+  } else {
+    list.innerHTML = '';
+    closedGroups.forEach(group => list.appendChild(createClosedGroupItem(group, t)));
+  }
+}
+
+function sortClosedGroups(groups, method, direction) {
+  groups.sort((a, b) => {
+    let cmp = 0;
+    switch (method) {
+      case 'name': cmp = (a.title || '').localeCompare(b.title || '', 'zh-Hant'); break;
+      case 'tabCount': cmp = (a.tabs?.length || 0) - (b.tabs?.length || 0); break;
+      case 'color': cmp = COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color); break;
+      case 'created': cmp = (a.closedAt || 0) - (b.closedAt || 0); break;
+    }
+    return direction === 'desc' ? -cmp : cmp;
+  });
+  return groups;
+}
+
+function createOpenGroupItem(group, index, t) {
   const item = document.createElement('div');
   item.className = 'group-item';
   item.draggable = true;
@@ -339,21 +418,78 @@ function createGroupItem(group, index, t) {
     <span class="group-color" style="background:${COLOR_MAP[group.color] || COLOR_MAP.grey}"></span>
     <span class="${nameClass}">${escapeHtml(displayName)}</span>
     <span class="group-tab-count">${group.tabCount} ${t.tabs}</span>
-    <button class="group-pin ${isPinned ? 'pinned' : ''}" data-group-id="${group.id}" title="${isPinned ? t.unpin : t.pin}">&#x1F4CC;</button>
+    <button class="group-pin ${isPinned ? 'pinned' : ''}" title="${isPinned ? t.unpin : t.pin}">&#x1F4CC;</button>
   `;
 
   item.querySelector('.group-pin').addEventListener('click', (e) => {
     e.stopPropagation();
-    const gid = group.id;
-    if (pinnedGroups.includes(gid)) {
-      pinnedGroups = pinnedGroups.filter(id => id !== gid);
+    if (pinnedGroups.includes(group.id)) {
+      pinnedGroups = pinnedGroups.filter(id => id !== group.id);
     } else {
-      pinnedGroups.push(gid);
+      pinnedGroups.push(group.id);
     }
-    refreshGroupList();
+    refreshOpenGroups();
   });
 
   return item;
+}
+
+function createClosedGroupItem(group, t) {
+  const item = document.createElement('div');
+  item.className = 'closed-item';
+
+  const displayName = group.title || t.unnamed;
+  const nameClass = group.title ? 'group-name' : 'group-name unnamed';
+  const tabCount = group.tabs?.length || 0;
+  const timeAgo = formatTimeAgo(group.closedAt, t);
+
+  item.innerHTML = `
+    <span class="group-color" style="background:${COLOR_MAP[group.color] || COLOR_MAP.grey}"></span>
+    <span class="${nameClass}">${escapeHtml(displayName)}</span>
+    <span class="group-tab-count">${tabCount} ${t.tabs}</span>
+    <span class="closed-meta">${timeAgo}</span>
+    <div class="closed-actions">
+      <button class="btn-reopen" data-id="${group.id}">${t.reopen}</button>
+      <button class="btn-remove-closed" data-id="${group.id}">&times;</button>
+    </div>
+  `;
+
+  item.querySelector('.btn-reopen').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = '...';
+    await reopenGroup(group);
+    await refreshAll();
+    showToast(i18n[currentLang].reopened);
+  });
+
+  item.querySelector('.btn-remove-closed').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await removeClosedGroup(group.id);
+    await refreshClosedGroups();
+  });
+
+  return item;
+}
+
+function formatTimeAgo(timestamp, t) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (currentLang === 'zh_TW') {
+    if (mins < 1) return '剛才';
+    if (mins < 60) return `${mins} 分鐘前`;
+    if (hours < 24) return `${hours} 小時前`;
+    return `${days} 天前`;
+  }
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ${t.ago}`;
+  if (hours < 24) return `${hours}h ${t.ago}`;
+  return `${days}d ${t.ago}`;
 }
 
 function setupDragAndDrop(list) {
@@ -403,15 +539,15 @@ function setupDragAndDrop(list) {
         list.insertBefore(draggedItem, item);
       }
 
-      const data = await getGroupsInfo(currentWindowId);
+      const data = await getOpenGroups(currentWindowId);
       const targetGroup = data.groups.find(g => g.id === targetGroupId);
       if (targetGroup) {
         try {
           await chrome.tabGroups.move(draggedGroupId, { index: targetGroup.minIndex });
-        } catch (e) {
-          console.warn('Failed to move group:', e);
+        } catch (err) {
+          console.warn('Drag move failed:', err);
         }
-        await refreshGroupList();
+        await refreshOpenGroups();
         showToast(i18n[currentLang].sortDone);
       }
     });
@@ -422,9 +558,7 @@ function showToast(message) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
   toast.style.display = 'block';
-  setTimeout(() => {
-    toast.style.display = 'none';
-  }, 1500);
+  setTimeout(() => { toast.style.display = 'none'; }, 1500);
 }
 
 function escapeHtml(text) {
