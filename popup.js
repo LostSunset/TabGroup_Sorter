@@ -94,6 +94,11 @@ let currentSortMethod = null;
 let pinnedGroups = [];
 let currentWindowId;
 
+// 安全取得 DOM 元素，避免 null TypeError
+function $(id) {
+  return document.getElementById(id);
+}
+
 // ── Chrome API helpers ──
 
 async function getOpenGroups(windowId) {
@@ -281,8 +286,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentDirection = settings.sortDirection || 'asc';
       currentSortMethod = settings.sortMethod || null;
       pinnedGroups = settings.pinnedGroups || [];
-      const autoSortEl = document.getElementById('auto-sort');
-      const ungroupedPosEl = document.getElementById('ungrouped-position');
+      const autoSortEl = $('auto-sort');
+      const ungroupedPosEl = $('ungrouped-position');
       if (autoSortEl) autoSortEl.checked = settings.autoSort || false;
       if (ungroupedPosEl) ungroupedPosEl.value = settings.ungroupedPosition || 'end';
     }
@@ -303,28 +308,34 @@ function applyLanguage() {
     const key = el.getAttribute('data-i18n');
     if (t[key]) el.textContent = t[key];
   });
-  document.getElementById('btn-lang').textContent = currentLang === 'zh_TW' ? 'EN' : '中';
+  const langBtn = $('btn-lang');
+  if (langBtn) langBtn.textContent = currentLang === 'zh_TW' ? 'EN' : '中';
+}
+
+function on(id, event, handler) {
+  const el = $(id);
+  if (el) el.addEventListener(event, handler);
 }
 
 function bindEvents() {
-  document.getElementById('btn-lang').addEventListener('click', () => {
+  on('btn-lang', 'click', () => {
     currentLang = currentLang === 'zh_TW' ? 'en' : 'zh_TW';
     applyLanguage();
     refreshAll();
   });
 
-  document.getElementById('btn-settings').addEventListener('click', () => {
-    const panel = document.getElementById('settings-panel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  on('btn-settings', 'click', () => {
+    const panel = $('settings-panel');
+    if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   });
 
-  document.getElementById('btn-collapse-all').addEventListener('click', async () => {
+  on('btn-collapse-all', 'click', async () => {
     await toggleCollapseAll(currentWindowId, true);
     await refreshAll();
     showToast(i18n[currentLang].collapsed);
   });
 
-  document.getElementById('btn-expand-all').addEventListener('click', async () => {
+  on('btn-expand-all', 'click', async () => {
     await toggleCollapseAll(currentWindowId, false);
     await refreshAll();
     showToast(i18n[currentLang].expanded);
@@ -332,7 +343,6 @@ function bindEvents() {
 
   document.querySelectorAll('.sort-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      // 同一排序方式再點一次 → 切換升降序
       if (currentSortMethod === btn.dataset.sort) {
         currentDirection = currentDirection === 'asc' ? 'desc' : 'asc';
         updateDirectionButtons();
@@ -343,43 +353,43 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('btn-asc').addEventListener('click', async () => {
+  on('btn-asc', 'click', async () => {
     currentDirection = 'asc';
     updateDirectionButtons();
     if (currentSortMethod) await performSort();
   });
 
-  document.getElementById('btn-desc').addEventListener('click', async () => {
+  on('btn-desc', 'click', async () => {
     currentDirection = 'desc';
     updateDirectionButtons();
     if (currentSortMethod) await performSort();
   });
 
-  document.getElementById('btn-save-settings').addEventListener('click', async () => {
+  on('btn-save-settings', 'click', async () => {
     await saveSettings({
-      autoSort: document.getElementById('auto-sort').checked,
+      autoSort: $('auto-sort')?.checked || false,
       sortMethod: currentSortMethod,
       sortDirection: currentDirection,
       pinnedGroups,
-      ungroupedPosition: document.getElementById('ungrouped-position').value,
+      ungroupedPosition: $('ungrouped-position')?.value || 'end',
       language: currentLang
     });
     showToast(i18n[currentLang].saved);
   });
 
-  document.getElementById('btn-clear-closed').addEventListener('click', async () => {
+  on('btn-clear-closed', 'click', async () => {
     await clearAllClosed();
     await refreshAll();
     showToast(i18n[currentLang].cleared);
   });
 
-  document.getElementById('ungrouped-position').addEventListener('change', () => {
+  on('ungrouped-position', 'change', () => {
     if (currentSortMethod) performSort();
   });
 }
 
 async function performSort() {
-  const pos = document.getElementById('ungrouped-position').value;
+  const pos = $('ungrouped-position')?.value || 'end';
   await applySort(currentWindowId, currentSortMethod, currentDirection, pinnedGroups, pos);
   await refreshAll();
   showToast(i18n[currentLang].sortDone);
@@ -392,8 +402,10 @@ function updateSortButtons() {
 }
 
 function updateDirectionButtons() {
-  document.getElementById('btn-asc').classList.toggle('active', currentDirection === 'asc');
-  document.getElementById('btn-desc').classList.toggle('active', currentDirection === 'desc');
+  const ascBtn = $('btn-asc');
+  const descBtn = $('btn-desc');
+  if (ascBtn) ascBtn.classList.toggle('active', currentDirection === 'asc');
+  if (descBtn) descBtn.classList.toggle('active', currentDirection === 'desc');
 }
 
 async function refreshAll() {
@@ -408,11 +420,11 @@ async function refreshOpenGroups() {
     console.warn('refreshOpenGroups error:', e);
     data = { groups: [], ungroupedCount: 0 };
   }
-  const list = document.getElementById('open-group-list');
+  const list = $('open-group-list');
   const t = i18n[currentLang];
   if (!list) return;
 
-  const countEl = document.getElementById('open-count');
+  const countEl = $('open-count');
   if (countEl) countEl.textContent = data.groups.length;
 
   if (data.groups.length === 0) {
@@ -423,12 +435,15 @@ async function refreshOpenGroups() {
     setupDragAndDrop(list);
   }
 
-  const ungroupedInfo = document.getElementById('ungrouped-info');
-  if (data.ungroupedCount > 0) {
-    ungroupedInfo.style.display = 'flex';
-    document.getElementById('ungrouped-count').textContent = data.ungroupedCount;
-  } else {
-    ungroupedInfo.style.display = 'none';
+  const ungroupedInfo = $('ungrouped-info');
+  if (ungroupedInfo) {
+    if (data.ungroupedCount > 0) {
+      ungroupedInfo.style.display = 'flex';
+      const ucEl = $('ungrouped-count');
+      if (ucEl) ucEl.textContent = data.ungroupedCount;
+    } else {
+      ungroupedInfo.style.display = 'none';
+    }
   }
 }
 
@@ -440,7 +455,7 @@ async function refreshClosedGroups() {
     console.warn('refreshClosedGroups error:', e);
     closedGroups = [];
   }
-  const list = document.getElementById('closed-group-list');
+  const list = $('closed-group-list');
   const t = i18n[currentLang];
   if (!list) return;
 
@@ -448,7 +463,7 @@ async function refreshClosedGroups() {
     closedGroups = sortClosedGroups([...closedGroups], currentSortMethod, currentDirection);
   }
 
-  const countEl = document.getElementById('closed-count');
+  const countEl = $('closed-count');
   if (countEl) countEl.textContent = closedGroups.length;
 
   if (closedGroups.length === 0) {
@@ -626,7 +641,7 @@ function setupDragAndDrop(list) {
 }
 
 function showToast(message) {
-  const toast = document.getElementById('toast');
+  const toast = $('toast');
   if (!toast) return;
   toast.textContent = message;
   toast.style.display = 'block';
