@@ -22,10 +22,17 @@
       </div>
     </header>
 
-    <!-- Quick Actions -->
+    <!-- Quick Actions Row 1 -->
     <div class="quick-actions">
       <button id="btn-collapse-all" class="action-btn" data-i18n="collapseAll">收合全部</button>
       <button id="btn-expand-all" class="action-btn" data-i18n="expandAll">展開全部</button>
+    </div>
+
+    <!-- Quick Actions Row 2 (New) -->
+    <div class="quick-actions">
+      <button id="btn-auto-group" class="action-btn accent-outline" data-i18n="autoGroup">自動分組</button>
+      <button id="btn-dedup" class="action-btn" data-i18n="dedupTabs">去重分頁</button>
+      <button id="btn-ungroup-all" class="action-btn" data-i18n="ungroupAll">解散群組</button>
     </div>
 
     <!-- Sort Controls -->
@@ -71,6 +78,21 @@
       </select>
     </div>
 
+    <!-- Saved Sessions (New) -->
+    <div class="section-header">
+      <span data-i18n="savedSessions">已儲存的工作區</span>
+      <span id="session-count" class="badge">0</span>
+      <button id="btn-save-session" class="badge-btn" data-i18n="saveSession">儲存目前</button>
+    </div>
+    <div id="save-session-form" class="inline-form" style="display:none;">
+      <input type="text" id="session-name-input" class="form-input" placeholder="工作區名稱..." maxlength="50">
+      <button id="btn-confirm-save-session" class="form-btn primary" data-i18n="save">儲存</button>
+      <button id="btn-cancel-save-session" class="form-btn">✕</button>
+    </div>
+    <div id="session-list" class="group-list">
+      <div class="empty-state" data-i18n="noSessions">沒有已儲存的工作區</div>
+    </div>
+
     <!-- Settings Panel -->
     <div id="settings-panel" class="settings-panel" style="display:none;">
       <h3 data-i18n="settingsTitle">設定</h3>
@@ -78,6 +100,61 @@
         <input type="checkbox" id="auto-sort">
         <span data-i18n="autoSort">開新視窗時自動排序</span>
       </label>
+      <label class="setting-row">
+        <input type="checkbox" id="realtime-auto-sort">
+        <span data-i18n="realtimeAutoSort">即時自動排序</span>
+      </label>
+
+      <!-- Custom Rules -->
+      <div class="rules-section">
+        <div class="rules-header">
+          <span data-i18n="customRules">自訂規則</span>
+          <button id="btn-add-rule" class="badge-btn" data-i18n="addRule">新增規則</button>
+        </div>
+        <div id="rule-editor" class="rule-editor" style="display:none;">
+          <input type="text" id="rule-pattern" class="form-input" placeholder="URL pattern (e.g., github.com/*)" maxlength="200">
+          <div class="rule-editor-row">
+            <select id="rule-type" class="select-sm">
+              <option value="glob">Glob</option>
+              <option value="regex">Regex</option>
+            </select>
+            <input type="text" id="rule-name" class="form-input" placeholder="群組名稱" maxlength="50">
+            <select id="rule-color" class="select-sm">
+              <option value="grey">Grey</option>
+              <option value="blue">Blue</option>
+              <option value="red">Red</option>
+              <option value="yellow">Yellow</option>
+              <option value="green">Green</option>
+              <option value="pink">Pink</option>
+              <option value="purple">Purple</option>
+              <option value="cyan">Cyan</option>
+              <option value="orange">Orange</option>
+            </select>
+          </div>
+          <div class="rule-editor-actions">
+            <button id="btn-save-rule" class="form-btn primary" data-i18n="save">儲存</button>
+            <button id="btn-cancel-rule" class="form-btn">✕</button>
+          </div>
+        </div>
+        <div id="rule-list" class="rule-list"></div>
+      </div>
+
+      <!-- Uniform Color -->
+      <div class="uniform-color-section">
+        <button id="btn-uniform-color" class="action-btn" data-i18n="uniformColor">統一顏色</button>
+        <div id="color-picker" class="color-picker" style="display:none;">
+          <span class="color-dot" data-color="grey" style="background:var(--group-grey)"></span>
+          <span class="color-dot" data-color="blue" style="background:var(--group-blue)"></span>
+          <span class="color-dot" data-color="red" style="background:var(--group-red)"></span>
+          <span class="color-dot" data-color="yellow" style="background:var(--group-yellow)"></span>
+          <span class="color-dot" data-color="green" style="background:var(--group-green)"></span>
+          <span class="color-dot" data-color="pink" style="background:var(--group-pink)"></span>
+          <span class="color-dot" data-color="purple" style="background:var(--group-purple)"></span>
+          <span class="color-dot" data-color="cyan" style="background:var(--group-cyan)"></span>
+          <span class="color-dot" data-color="orange" style="background:var(--group-orange)"></span>
+        </div>
+      </div>
+
       <div class="settings-actions">
         <button id="btn-clear-closed" class="action-btn danger" data-i18n="clearClosed">清除所有已關閉紀錄</button>
         <button id="btn-save-settings" class="action-btn primary" data-i18n="save">儲存</button>

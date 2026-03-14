@@ -12,6 +12,7 @@
   --success: #66bb6a;
   --danger: #ef5350;
   --danger-hover: #f44336;
+  --warning: #ffa726;
   --radius: 8px;
   --shadow: 0 2px 8px rgba(0,0,0,0.3);
 
@@ -88,12 +89,12 @@ body {
 /* Quick Actions */
 .quick-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-btn {
   flex: 1;
-  padding: 7px 10px;
+  padding: 7px 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   color: var(--text);
@@ -101,6 +102,7 @@ body {
   cursor: pointer;
   font-size: 12px;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .action-btn:hover {
@@ -126,6 +128,31 @@ body {
 
 .action-btn.danger:hover {
   background: rgba(239, 83, 80, 0.15);
+}
+
+.action-btn.accent-outline {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn.accent-outline:hover {
+  background: rgba(79, 195, 247, 0.12);
+}
+
+.action-btn.confirm {
+  border-color: var(--warning);
+  color: var(--warning);
+  animation: pulse 1s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Sort Controls */
@@ -222,6 +249,22 @@ body {
   padding: 1px 7px;
   border-radius: 10px;
   font-size: 11px;
+}
+
+.badge-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.badge-btn:hover {
+  background: rgba(79, 195, 247, 0.15);
 }
 
 /* Group List */
@@ -400,6 +443,123 @@ body {
 
 .select-sm:focus { outline: none; border-color: var(--accent); }
 
+/* Session Item */
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.15s;
+}
+
+.session-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.session-name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.session-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-restore {
+  background: rgba(79, 195, 247, 0.12);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.btn-restore:hover {
+  background: rgba(79, 195, 247, 0.25);
+}
+
+.btn-delete-session {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.btn-delete-session:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Inline Form */
+.inline-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.form-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+.form-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.form-btn.primary {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.form-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.form-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 /* Settings Panel */
 .settings-panel {
   background: var(--bg-surface);
@@ -428,6 +588,155 @@ body {
 .settings-actions {
   display: flex;
   gap: 8px;
+  margin-top: 10px;
+}
+
+/* Custom Rules */
+.rules-section {
+  margin: 10px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.rule-list::-webkit-scrollbar { width: 4px; }
+.rule-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.rule-item:hover {
+  border-color: var(--accent);
+}
+
+.rule-pattern {
+  flex: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10px;
+}
+
+.rule-group-name {
+  color: var(--text);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.rule-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.rule-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.rule-actions button:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.rule-actions .btn-delete-rule:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Rule Editor */
+.rule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.rule-editor-row {
+  display: flex;
+  gap: 6px;
+}
+
+.rule-editor-row .form-input {
+  min-width: 0;
+}
+
+.rule-editor-row .select-sm {
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.rule-editor-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Uniform Color */
+.uniform-color-section {
+  margin: 10px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.color-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.color-dot:hover {
+  border-color: var(--text);
+  transform: scale(1.2);
 }
 
 /* Toast */
@@ -445,6 +754,10 @@ body {
   box-shadow: var(--shadow);
   z-index: 100;
   animation: toast-in 0.3s ease;
+}
+
+.toast.warning {
+  background: var(--warning);
 }
 
 @keyframes toast-in {

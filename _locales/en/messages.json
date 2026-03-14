@@ -3,6 +3,18 @@
     "message": "TabGroup Sorter"
   },
   "appDescription": {
-    "message": "Sort Chrome tab groups by name, creation time, tab count, color, or drag-and-drop."
+    "message": "Chrome tab group sorting & management — auto group, custom rules, real-time sort, session save/restore, dedup tabs."
+  },
+  "cmdSort": {
+    "message": "Sort tab groups"
+  },
+  "cmdCollapse": {
+    "message": "Collapse all groups"
+  },
+  "cmdExpand": {
+    "message": "Expand all groups"
+  },
+  "cmdAutoGroup": {
+    "message": "Auto group by domain"
   }
 }

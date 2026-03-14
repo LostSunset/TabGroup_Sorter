@@ -3,6 +3,18 @@
     "message": "TabGroup Sorter"
   },
   "appDescription": {
-    "message": "對 Chrome 分頁群組進行排序 — 依名稱、建立時間、分頁數量、顏色，或手動拖曳排序。"
+    "message": "Chrome 分頁群組排序與管理 — 自動分組、自訂規則、即時排序、工作區儲存還原、去重分頁。"
+  },
+  "cmdSort": {
+    "message": "排序分頁群組"
+  },
+  "cmdCollapse": {
+    "message": "收合所有群組"
+  },
+  "cmdExpand": {
+    "message": "展開所有群組"
+  },
+  "cmdAutoGroup": {
+    "message": "依網域自動分組"
   }
 }
